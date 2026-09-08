@@ -46,6 +46,7 @@ Originalmente um script manual no Google Colab, a gestão de usuários no Genesy
 - **Consulta e migração de usuários** — busca por matrícula/e-mail/UUID, reativação de contas e migração completa (divisão + role + grupo) em um fluxo só.
 - **Status na plataforma (presença)** — na Consulta, após achar o usuário: totais e timeline de `primaryPresence` do dia civil BR (`America/Sao_Paulo`) via `GET /analytics/users/{id}/presence?date=YYYY-MM-DD` (proxy da Analytics User Status Detail). Exige scope OAuth `analytics:readonly` no client credentials (ver abaixo).
 - **Diagnóstico de Telefonia e Ramal (WebRTC)** — verificação instantânea na aba Consulta dos 3 pilares da estação/softphone (estação atribuída, status `ASSOCIATED` e telefone base ativo com Site). Discrimina Cenário 1 (backend 100% OK / falha local de microfone/cache) vs Cenário 2 (inconsistência no Genesys Cloud) e inclui ação rápida para copiar o laudo técnico formatado para chamados.
+- **Dashboard de Diagnóstico de Interações** — interface focada na auditoria e análise técnica de chamadas e interações usando um `conversationId`. Inclui identificação imediata sobre origem do atendimento (transferência humana ou bot/URA), métricas da chamada, trilha temporal visual (Timeline), diagnóstico WebRTC/Borda AWS e acesso aos payloads JSON puros, auxiliando rapidamente na resolução de chamados técnicos relatados por operadores.
 - **Trilha de Auditoria** — alterações de uma pessoa no período (limitado a 48h para buscas profundas para garantir estabilidade): **Pesquisar** traz só divisão; botões separados buscam filas, roles ou grupos (merge na lista), via streaming SSE em tempo real (`POST /audits/user-changes/stream`) com progresso granular e cards normalizados no frontend.
 
 ## 🔐 Autenticação (resumo)
@@ -186,7 +187,7 @@ Arquivo `backend/.env` (copie de `backend/.env.example`). **Não** coloque secre
 | `GENESYS_CLIENT_SECRET` | Secret OAuth | `seu_client_secret_aqui` |
 | `GENESYS_REGION` | Região da org Genesys | `sae1.pure.cloud` |
 
-**Scopes / permissões OAuth (Admin Genesys → Integrations → OAuth):** além dos já usados por users/queues/audits, a feature de presença precisa do scope **`analytics:readonly`** no mesmo client (`GENESYS_CLIENT_ID`), com role da integração autorizada a analytics user detail nas divisões (FGAC). Sem isso a API responde **403** (ou resultado vazio se faltar grant de divisão). Detalhes: [`docs/ANALYTICS-PRESENCA-CONSULTA.md`](docs/ANALYTICS-PRESENCA-CONSULTA.md).
+**Scopes / permissões OAuth (Admin Genesys → Integrations → OAuth):** além dos já usados por users/queues/audits, a feature de presença precisa do scope **`analytics:readonly`** no mesmo client (`GENESYS_CLIENT_ID`), com role da integração autorizada a analytics user detail nas divisões (FGAC). Sem isso a API responde **403** (ou resultado vazio se faltar grant de divisão). Detalhes: [`docs/ANALYTICS-PRESENCA-CONSULTA.md`](docs/ANALYTICS-PRESENCA-CONSULTA.md). Para a feature de Diagnóstico de Interações, são necessários os scopes adicionais `analytics:conversationDetail:view` e `telephony:providers:view`.
 | `JWT_SECRET_KEY` | Assinatura dos JWTs locais | `openssl rand -hex 32` |
 | `JWT_EXPIRE_MINUTES` | Idle da sessão (sliding) | `2880` (48h) |
 | `ENVIRONMENT` | Flags de cookie (Secure / SameSite) | `development` / `production` |
