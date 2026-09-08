@@ -99,7 +99,7 @@
           </div>
           
           <div class="flex justify-between items-center border-t border-slate-100 pt-3 mt-2">
-            <span class="text-sm font-semibold text-slate-600 flex items-center gap-1 cursor-help" title="Mecânica de Roteamento: Indica a forma como a interação chegou ao agente. 'Manual' significa que houve transferência direta, ação humana ou roteamento direcionado, não passando pela fila automática tradicional.">
+            <span class="text-sm font-semibold text-slate-600 flex items-center gap-1 cursor-help" title="Mecânica de Roteamento: Indica a forma como a interação chegou ao agente. 'Standard' = fila automática (ACD); 'Manual' = transferência direta ou direcionada; 'Bullseye/Predictive' = roteamento avançado por skills.">
               Mecânica de Roteamento:
               <span class="inline-flex items-center justify-center w-3 h-3 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold">?</span>
             </span>
