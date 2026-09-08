@@ -1,5 +1,5 @@
 """
-Armazenamento persistente de tokens de magic link (uso único, curta validade).
+Armazenamento persistente de tokens de magic link (curta validade, múltiplos usos).
 
 Os tokens brutos nunca são gravados — apenas o hash SHA-256.
 Arquivo: auth_tokens.json (gitignored).
@@ -53,17 +53,14 @@ def _save(tokens: list[dict]) -> None:
 
 
 def cleanup_expired(tokens: Optional[list[dict]] = None) -> list[dict]:
-    """Remove entradas expiradas (e já usadas há mais de 24h)."""
+    """Remove entradas que já ultrapassaram o tempo limite de expiração."""
     if tokens is None:
         tokens = _load()
     now = _now()
     kept: list[dict] = []
     for entry in tokens:
         expires_at = _parse_dt(entry.get("expires_at"))
-        used_at = _parse_dt(entry.get("used_at"))
-        if expires_at and expires_at < now and not used_at:
-            continue
-        if used_at and used_at < now - timedelta(hours=24):
+        if expires_at and expires_at < now:
             continue
         kept.append(entry)
     return kept
@@ -75,8 +72,9 @@ def create_magic_link_token(
     expire_minutes: Optional[int] = None,
 ) -> str:
     """
-    Gera um token de uso único, persiste o hash e devolve o valor bruto
-    (para compor o link enviado por e-mail).
+    Gera um token de magic link, persiste o hash e devolve o valor bruto
+    (para compor o link enviado por e-mail). Válido por expire_minutes (padrão 10 min),
+    podendo ser utilizado quantas vezes forem necessárias dentro da janela.
     """
     minutes = expire_minutes if expire_minutes is not None else settings.MAGIC_LINK_EXPIRE_MINUTES
     raw = secrets.token_urlsafe(32)
@@ -86,6 +84,7 @@ def create_magic_link_token(
         "purpose": purpose,
         "expires_at": (_now() + timedelta(minutes=minutes)).isoformat(),
         "used_at": None,
+        "use_count": 0,
     }
     tokens = cleanup_expired()
     tokens.append(entry)
@@ -99,7 +98,7 @@ def _find_valid_entry(
     tokens: list[dict],
     now: datetime,
 ) -> Optional[dict]:
-    """Localiza entrada válida (não usada, não expirada) sem mutar o store."""
+    """Localiza entrada válida (não expirada) sem mutar o store."""
     if not raw_token:
         return None
 
@@ -108,8 +107,6 @@ def _find_valid_entry(
         if entry.get("token_hash") != token_hash:
             continue
         if entry.get("purpose") != purpose:
-            return None
-        if entry.get("used_at"):
             return None
         expires_at = _parse_dt(entry.get("expires_at"))
         if not expires_at or expires_at < now:
@@ -120,9 +117,9 @@ def _find_valid_entry(
 
 def peek_magic_link_token(raw_token: str, purpose: str = "login") -> Optional[str]:
     """
-    Valida o token sem consumir (não marca used_at).
-    Usado no GET de landing — scanners/prefetch não queimam o link.
-    Retorna o username ou None se inválido/expirado/já usado.
+    Valida o token sem alterar contadores de uso.
+    Usado no GET de landing — scanners/prefetch não interferem.
+    Retorna o username ou None se inválido/expirado.
     """
     tokens = cleanup_expired()
     entry = _find_valid_entry(raw_token, purpose, tokens, _now())
@@ -131,8 +128,9 @@ def peek_magic_link_token(raw_token: str, purpose: str = "login") -> Optional[st
 
 def consume_magic_link_token(raw_token: str, purpose: str = "login") -> Optional[str]:
     """
-    Valida e consome o token (marca used_at).
-    Retorna o username em caso de sucesso, ou None se inválido/expirado/já usado.
+    Valida o token e registra o uso (atualiza used_at e incrementa use_count).
+    O token permanece utilizável até que expires_at seja atingido.
+    Retorna o username em caso de sucesso, ou None se inválido/expirado.
     """
     tokens = cleanup_expired()
     now = _now()
@@ -141,5 +139,6 @@ def consume_magic_link_token(raw_token: str, purpose: str = "login") -> Optional
         return None
 
     entry["used_at"] = now.isoformat()
+    entry["use_count"] = entry.get("use_count", 0) + 1
     _save(tokens)
     return entry.get("username")

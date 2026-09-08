@@ -25,22 +25,22 @@ Login é **passwordless** (magic link). O frontend **não** guarda senha nem API
 2. Mensagem genérica: “Verifique seu e-mail” (link válido ~10 min —
    `MAGIC_LINK_EXPIRE_MINUTES`, distinto da sessão JWT).
 3. O link do e-mail aponta para `GET /api/auth/verify?token=...`. O backend
-   **não consome** o token: só valida (*peek*) e redireciona para
-   `/login?token=...` ou `/login?error=invalid_link`.
+   valida o token e redireciona para `/login?token=...` ou `/login?error=invalid_link`.
 4. Ao montar `/login?token=...`, a SPA auto-dispara `confirmMagicLink(token)` →
    `POST /auth/verify` (mostra “Entrando…” — **sem** botão “Confirmar acesso”).
-   Só o POST consome o token e seta o cookie HttpOnly `access_token`.
+   O POST emite a sessão JWT e seta o cookie HttpOnly `access_token`. O link
+   continua utilizável durante toda a sua janela de 10 minutos.
 5. Em seguida `useAuth.checkAuth()` → `GET /auth/me` (`credentials: include`)
    e navega para a Home.
 6. Sessão idle **48h** (`JWT_EXPIRE_MINUTES=2880`, sliding no backend a cada
    request autenticado).
 7. Logout: `POST /auth/logout` + limpa estado local.
 
-**Por quê POST e não GET?** Scanners de e-mail (Cisco Umbrella, Safe Links)
-fazem GET/HEAD e queimavam links de uso único. O browser do usuário executa JS
-e é o único a chamar o POST. `HEAD /auth/verify` no backend também não consome.
+**Validade de 10 minutos:** O token permanece utilizável durante os 10 minutos
+de TTL, independentemente de quantas vezes for acessado. Isso protege contra
+scanners de e-mail, cliques repetidos ou reabertura do link em outras abas.
 
-Erros de link: query `error=invalid_link` ou falha no POST → mensagem
+Erros de link: query `error=invalid_link` ou falha no POST (após 10 min) → mensagem
 “Link inválido, expirado ou já utilizado. Solicite um novo acesso.”
 
 Requisitos de acesso: e-mail `@claro.com.br` **e** cadastro prévio em `users.json`

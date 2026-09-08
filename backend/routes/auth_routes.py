@@ -130,11 +130,8 @@ def _login_url(**query: str) -> str:
 @router.get("/verify")
 async def verify_magic_link_landing(token: str = ""):
     """
-    Landing do magic link — NÃO consome o token.
-
-    Prefetch/scanners de e-mail (Safe Links, Umbrella, etc.) só fazem GET;
-    redirecionamos para o frontend com o token na query. O consumo ocorre
-    apenas no POST /auth/verify (disparado pelo JS do browser do usuário).
+    Landing do magic link — redireciona para o frontend com o token na query.
+    Válido por 10 minutos (permite múltiplos usos no período).
     """
     username = peek_magic_link_token(token, purpose="login") if token else None
     if not username:
@@ -160,7 +157,7 @@ async def verify_magic_link_landing(token: str = ""):
 @router.head("/verify")
 async def verify_magic_link_head(token: str = ""):
     """
-    HEAD de scanners (ex.: Microsoft Safe Links) — não consome o token.
+    HEAD de scanners (ex.: Microsoft Safe Links) — valida se o link ainda está ativo.
     204 se o link ainda é utilizável; 404 caso contrário.
     """
     username = peek_magic_link_token(token, purpose="login") if token else None
@@ -176,8 +173,8 @@ async def verify_magic_link_head(token: str = ""):
 @router.post("/verify")
 async def confirm_magic_link(payload: VerifyConfirmRequest):
     """
-    Consome o magic link (uso único): seta cookie JWT e devolve JSON
-    para o frontend completar o login. Único endpoint que autentica.
+    Autentica via magic link (válido por 10 minutos, permite múltiplos usos):
+    seta cookie JWT e devolve JSON para o frontend completar o login.
     """
     username = consume_magic_link_token(payload.token, purpose="login")
     if not username:

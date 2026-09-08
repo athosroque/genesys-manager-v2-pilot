@@ -25,34 +25,29 @@ Camada dupla: sessão local (operadores) + proxy Genesys (credenciais de org).
 1. Operador informa e-mail em `POST /auth/login`.
 2. Domínio deve ser `@{ALLOWED_EMAIL_DOMAIN}` (padrão: `claro.com.br`).
 3. O e-mail **precisa** existir e estar `active` em `users.json`. Ter só o domínio **não** basta.
-4. Se o usuário existir, o backend gera um token de uso único (hash SHA-256 em
-   `auth_tokens.json`, TTL `MAGIC_LINK_EXPIRE_MINUTES` = 10 — distinto da sessão JWT),
+4. Se o usuário existir, o backend gera um token com TTL de 10 minutos (hash SHA-256 em
+   `auth_tokens.json`, `MAGIC_LINK_EXPIRE_MINUTES` = 10 — distinto da sessão JWT),
    envia o link via **Resend** (`{APP_BASE_URL}/api/auth/verify?token=...`) e
    responde com mensagem genérica (não revela se o e-mail existe).
-5. O clique abre `GET /auth/verify?token=...`, que **não consome** o token:
-   faz *peek*, valida e redireciona (302) para o frontend
+5. O clique abre `GET /auth/verify?token=...`, que valida e redireciona (302) para o frontend
    `/login?token=...` ou `/login?error=invalid_link` (sem JSON cru de erro no browser).
 6. A SPA (`LoginView`) monta com `?token=`, mostra “Entrando…” e dispara
-   automaticamente `POST /auth/verify` com `{ "token": "..." }` — **único** ponto
-   que consome o token, emite JWT e seta o cookie `access_token`
+   automaticamente `POST /auth/verify` com `{ "token": "..." }` — emite JWT e seta o cookie `access_token`
    (HttpOnly; Secure + SameSite=None em produção). Sem botão de confirmação.
+   O link permanece válido para múltiplos acessos durante toda a sua janela de 10 minutos.
 7. Sessão idle **48h** (`JWT_EXPIRE_MINUTES=2880`), renovada a cada request
    autenticado (sliding session).
 
-#### Por que GET não autentica (anti-prefetch / scanners)
+#### Validade por 10 minutos e resiliência a scanners
 
-Proxies de segurança de e-mail (Cisco Umbrella, Microsoft Safe Links, etc.)
-fazem `GET`/`HEAD` no link antes do usuário clicar. Se o consumo fosse no GET,
-o token de uso único morreria no scanner e o operador veria link inválido.
-Por isso:
+O link permanece ativo por **10 minutos**, independente de quantos acessos ou cliques
+ocorram nesse intervalo:
 
 | Método | Comportamento |
 | :--- | :--- |
-| `GET /auth/verify` | *Peek* apenas → redirect para `/login?token=...` ou `?error=invalid_link` |
-| `HEAD /auth/verify` | Resposta sem corpo (204 se utilizável, 404 caso contrário); **não consome** |
-| `POST /auth/verify` | Consome o token, seta cookie JWT, devolve JSON (`Acesso autorizado.` + user) |
-
-Só o browser do usuário executa o JS da SPA e chama o POST.
+| `GET /auth/verify` | Validação rápida → redirect para `/login?token=...` ou `?error=invalid_link` |
+| `HEAD /auth/verify` | Resposta sem corpo (204 se utilizável, 404 caso contrário) |
+| `POST /auth/verify` | Autentica, seta cookie JWT, devolve JSON (`Acesso autorizado.` + user). Funciona múltiplas vezes dentro dos 10 min |
 
 Arquivos sensíveis (gitignored): `users.json`, `auth_tokens.json`, `.env`.
 No Docker Compose, `users.json` e `auth_tokens.json` têm bind mount — sobrevivem

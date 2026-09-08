@@ -77,8 +77,8 @@ def send_magic_link(to_email: str, raw_token: str) -> None:
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
       <h2 style="color: #111;">Genesys Manager — link de acesso</h2>
-      <p>Clique no botão abaixo para entrar. O link é de uso único e expira em
-      <strong>{minutes} minutos</strong>.</p>
+      <p>Clique no botão abaixo para entrar. O link é válido por
+      <strong>{minutes} minutos</strong> (pode ser utilizado quantas vezes forem necessárias nesse período).</p>
       <p style="margin: 28px 0;">
         <a href="{link}"
            style="background:#e11d48;color:#fff;padding:12px 20px;
@@ -87,8 +87,7 @@ def send_magic_link(to_email: str, raw_token: str) -> None:
         </a>
       </p>
       <p style="color:#666;font-size:13px;">
-        Ao abrir o link no navegador, o acesso é concluído automaticamente.
-        Scanners de e-mail não consomem o link.<br><br>
+        Ao abrir o link no navegador, o acesso é concluído automaticamente.<br><br>
         Se o botão não funcionar, copie e cole este endereço no navegador:<br>
         <a href="{link}">{link}</a>
       </p>

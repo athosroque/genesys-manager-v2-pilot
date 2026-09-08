@@ -100,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { requestLoginLink, confirmMagicLink } from '../api/auth'
 import { useAuth } from '../composables/useAuth'
@@ -171,6 +171,16 @@ onMounted(() => {
     completeMagicLinkLogin(qToken.trim())
   }
 })
+
+watch(
+  () => route.query.token,
+  (newToken) => {
+    if (typeof newToken === 'string' && newToken.trim()) {
+      tokenProcessed = false
+      completeMagicLinkLogin(newToken.trim())
+    }
+  }
+)
 
 async function handleSubmit() {
   loading.value = true

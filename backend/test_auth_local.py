@@ -163,14 +163,15 @@ async def test_verify_expired_token_redirects_to_login_error(auth_env):
 
 
 @pytest.mark.asyncio
-async def test_verify_used_token_redirects_to_login_error(auth_env):
+async def test_verify_get_still_works_after_consumption(auth_env):
+    """Token continua válido para GET landing mesmo após ter sido consumido (válido por 10 min)."""
     raw = token_store.create_magic_link_token("alice")
     assert token_store.consume_magic_link_token(raw) == "alice"
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.get(f"/auth/verify?token={raw}", follow_redirects=False)
     assert response.status_code == 302
-    assert "error=invalid_link" in response.headers["location"]
+    assert f"token={raw}" in response.headers["location"]
 
 
 @pytest.mark.asyncio
@@ -193,7 +194,7 @@ async def test_verify_get_does_not_consume_token(auth_env):
 
 
 @pytest.mark.asyncio
-async def test_verify_post_sets_session(auth_env):
+async def test_verify_post_sets_session_and_allows_multiple_uses(auth_env):
     raw = token_store.create_magic_link_token("alice")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -212,21 +213,31 @@ async def test_verify_post_sets_session(auth_env):
     )
     assert payload["sub"] == "alice"
 
-    # Segundo POST falha (uso único)
+    # Segundo e terceiro POST funcionam normalmente (válido por 10 min, múltiplos usos)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         again = await ac.post("/auth/verify", json={"token": raw})
-    assert again.status_code == 400
+    assert again.status_code == 200
+    assert again.json()["user"]["username"] == "alice"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        third = await ac.post("/auth/verify", json={"token": raw})
+    assert third.status_code == 200
+    assert third.json()["user"]["username"] == "alice"
 
 
 @pytest.mark.asyncio
-async def test_verify_post_used_token_fails(auth_env):
-    raw = token_store.create_magic_link_token("alice")
-    assert token_store.consume_magic_link_token(raw) == "alice"
+async def test_verify_post_expired_token_fails(auth_env):
+    """Token expirado (>10 min) é rejeitado com 400."""
+    raw = token_store.create_magic_link_token("alice", expire_minutes=10)
+    tokens = json.loads(auth_env["tokens_file"].read_text(encoding="utf-8"))["tokens"]
+    tokens[0]["expires_at"] = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    auth_env["tokens_file"].write_text(json.dumps({"tokens": tokens}), encoding="utf-8")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.post("/auth/verify", json={"token": raw})
     assert response.status_code == 400
-    assert "já utilizado" in response.json()["detail"].lower() or "inválido" in response.json()["detail"].lower()
+    detail = response.json()["detail"].lower()
+    assert "inválido" in detail or "expirado" in detail
 
 
 @pytest.mark.asyncio
